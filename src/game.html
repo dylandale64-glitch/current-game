@@ -262,6 +262,7 @@ const CFG = {
   BUDGET:(d)=> d*0.46 + 0.70,
   GAUGE_MAX:0.9, DRAFT_EVERY:2,
   FUSE_PARALLEL:0.80,      // supply fuse, parallel boards only (amps)
+  MIN_MARGIN:0.14,         // every board must be solvable with this much headroom
   SLOWMO_MS:900
 };
 
@@ -449,6 +450,7 @@ function genBoard(){
   // keep-out zones seeded on the routes
   let n = S.stage===1 ? 0 : Math.min(Math.floor((S.stage-1)/2)+1, 4);
   if (S.breather) n = Math.max(0, n-2);
+  if (S.stage===4 || S.stage===6) n = Math.max(0, n-1);
   let guard=0;
   while (S.obs.length<n && guard++<300){
     const tgt = S.lamps[(Math.random()*S.lamps.length)|0];
@@ -464,16 +466,70 @@ function genBoard(){
   }
 
   // supply sized to this board's geometry so difficulty is layout-independent
-  let dSum=0; for (const b of S.branches) dSum += dist(S.src, S.lamps[b.lamps[0]]);
-  const dRef = dSum/S.branches.length;
-  const loadPer = S.branches[0].lamps.length * CFG.R_LOAD;
-  const ramp = (1 + CFG.V_RAMP*(S.stage-1)*META.skill) * (S.breather ? 0.80 : 1);
-  S.volts = CFG.I_REF*(rho()*dRef/CFG.W_REF + loadPer) * ramp * S.mods.volt;
-  S.budget = CFG.BUDGET(dSum) * S.mods.budget * (S.type==='parallel'?0.92:1);
-  S.fuse = S.type==='parallel' ? CFG.FUSE_PARALLEL*S.mods.imax : Infinity;
+  const teaching = (S.stage===4 || S.stage===6);
+  let ramp = (1 + CFG.V_RAMP*(S.stage-1)*META.skill)
+           * (S.breather ? 0.80 : 1) * (teaching ? 0.86 : 1);
+  let boost = 1;
+  const size = ()=>{
+    let dSum=0;
+    for (const b of S.branches){
+      let from=S.src;
+      for (const li of b.lamps){ dSum+=dist(from,S.lamps[li]); from=S.lamps[li]; }
+    }
+    const loadPer = S.branches[0].lamps.length * CFG.R_LOAD;
+    S.volts  = CFG.I_REF*(rho()*(dSum/S.branches.length)/CFG.W_REF + loadPer) * ramp * S.mods.volt;
+    S.budget = CFG.BUDGET(dSum) * S.mods.budget * (1 + 0.07*S.obs.length) * boost;
+    S.fuse   = S.type==='parallel' ? CFG.FUSE_PARALLEL*S.mods.imax : Infinity;
+  };
+  size();
+  // Ease the board until a competent route has real headroom. Clearing a
+  // keep-out zone is the gentlest lever, so spend those first; only then
+  // back off the supply.
+  // Clearing a keep-out zone shortens the route, which helps whatever is
+  // wrong, so spend those first. After that the lever has to match the
+  // complaint: a starved lamp wants more supply, a hot trace wants less, and
+  // a route you cannot afford wants more copper.
+  let ease=0;
+  while (ease++ < 30){
+    const r = boardMargin();
+    if (r.m >= CFG.MIN_MARGIN) break;
+    if (S.obs.length) S.obs.pop();
+    else if (r.bind === 'copper') boost *= 1.10;
+    else if (r.bind === 'under')  ramp  *= 1.06;
+    else                          ramp  *= 0.95;
+    size();
+  }
+  S.genMargin = +boardMargin().m.toFixed(3);
   S.phase='draw';
   buildGauges();
   banner();
+}
+
+// Best margin a competent player could reach on this board, across every
+// constraint at once. Negative means even a perfect route violates something.
+function boardMargin(){
+  let dSum=0;
+  for (const b of S.branches){
+    let from=S.src;
+    for (const li of b.lamps){ dSum+=dist(from,S.lamps[li]); from=S.lamps[li]; }
+  }
+  const routes=S.branches.length;
+  const L=(dSum/routes)*(1+0.12*S.obs.length);   // allow for routing around zones
+  const load=S.branches[0].lamps.length*CFG.R_LOAD;
+  const share=S.budget/routes;
+  let best={m:-Infinity,bind:'none'};
+  for(let k=0;k<=40;k++){
+    const w=wMin()+(wMax()-wMin())*k/40;
+    const I=S.volts/(rho()*L/w+load);
+    if (routes>1 && I*routes>S.fuse) continue;
+    const hSS=(I*I*rho()/(w*w))*CFG.K_HEAT/(CFG.K_COOL*S.mods.cool);
+    const c={ under:(I-CFG.I_MIN)/CFG.I_MIN, over:(iMax()-I)/iMax(),
+              heat:(hBurn()-hSS)/hBurn(), copper:(share-L*w)/Math.max(share,0.01) };
+    let bind='under', m=Infinity;
+    for(const k in c) if(c[k]<m){ m=c[k]; bind=k; }
+    if(m>best.m) best={m,bind};
+  }
+  return best;
 }
 
 /* ---------------- solver ---------------- */

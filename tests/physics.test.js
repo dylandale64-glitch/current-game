@@ -164,6 +164,32 @@ const state = (page) => page.evaluate(() => ({
   ok(pace.parallelStageNotEased, 'stage 6 still teaches parallel');
   ok(pace.breather && pace.easedV && pace.singleLamp, 'a close call schedules an easier next board');
 
+  console.log('\n== every board is winnable with headroom ==');
+  // The generator eases a board until a competent route has real margin, so a
+  // player is never handed a board that cannot be won well. This samples the
+  // whole stage range because the failure it guards against is random: one
+  // board in twenty coming out impossible reads as the game being unfair.
+  const gen = await page.evaluate(() => {
+    const out = { checked: 0, worst: Infinity, floor: CFG.MIN_MARGIN, bad: [] };
+    const savedSkill = META.skill;
+    for (let stage = 1; stage <= 30; stage++) {
+      for (let i = 0; i < 25; i++) {
+        S.mods = baseMods(); META.skill = 1;
+        S.needBreather = false; S.stage = stage; genBoard();
+        const m = boardMargin().m;
+        out.checked++;
+        if (m < out.worst) out.worst = +m.toFixed(3);
+        if (m < CFG.MIN_MARGIN) out.bad.push({ stage, margin: +m.toFixed(3), type: S.type });
+      }
+    }
+    META.skill = savedSkill;
+    return out;
+  });
+  console.log('   checked ' + gen.checked + ' generated boards, worst margin ' +
+              gen.worst + ' against a floor of ' + gen.floor);
+  ok(gen.bad.length === 0, 'no generated board falls below the solvability floor');
+  if (gen.bad.length) console.log('   offenders: ' + JSON.stringify(gen.bad.slice(0, 5)));
+
   console.log('\n== mute ==');
   const muted = await page.evaluate(() => {
     document.getElementById('mute').click();
