@@ -79,8 +79,11 @@
   #titlecard .tn{font-family:var(--f-disp);font-size:min(52px,11.5vw);font-weight:700;
                  letter-spacing:.26em;text-transform:uppercase;color:var(--copper);
                  text-indent:.26em;line-height:1;display:block}
-  #titlecard .ts{display:block;font-family:var(--f-mono);font-size:11px;color:var(--dim);
-                 margin-top:12px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  #titlecard .ts{display:block;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);
+                 margin-top:14px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+                 line-height:1.75;padding:0 20px}
+  #titlecard .ts em{color:var(--copper);font-style:normal}
+  #titlecard .ts s{color:var(--dim);text-decoration:none}
   #banner{position:absolute;left:0;right:0;top:12px;text-align:center;font-family:var(--f-disp);
           font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
           color:var(--cold);pointer-events:none;opacity:0;transition:opacity .35s}
@@ -691,7 +694,7 @@ function resetAll(){
 }
 
 cv.addEventListener("pointerdown",(e)=>{
-  A.init(); A.resume();
+  A.init(); A.resume(); dismissTitle();
   if (S.phase!=='draw') return;
   const p=toU(e);
   if (dist(p,S.src)>1.05){ A.nope(); return; }
@@ -1299,14 +1302,31 @@ function showBoss(){
 /* ---------------- identity, without a gate ---------------- */
 // The name shows over the playable board and fades. It never costs a tap,
 // which is the whole point: a menu is a wall between someone and the hook.
+function statusLine(){
+  if (META.runs === 0) return '';
+  const bits=[];
+  if (META.streak)  bits.push('<em>' + META.streak + '-day streak</em>');
+  if (!dailyDone()) bits.push('daily board waiting');
+  if (META.best)    bits.push('best ' + META.best.toLocaleString());
+  if (META.rp)      bits.push(META.rp + ' RP banked');
+  const ready = UPG.find(u => lvl(u.id) < u.max && META.rp >= u.cost(lvl(u.id)));
+  if (ready) bits.push('<em>Lab: ' + ready.n + ' ready</em>');
+  return bits.join('<s>   ·   </s>');
+}
+
 function showTitle(){
   const t=$("titlecard");
   $('bosscard').classList.remove('show');
-  $("titlesub").textContent = META.runs > 0
-    ? 'best ' + META.best.toLocaleString() + '   ·   ' + META.rp + ' RP banked'
-    : '';
+  setHTML('titlesub', statusLine());
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), META.runs > 0 ? 2200 : 1700);
+  clearTimeout(showTitle._t);
+  showTitle._t = setTimeout(()=>t.classList.remove('show'), META.runs > 0 ? 3000 : 1700);
+}
+// the board underneath is already live, so the first touch both starts the
+// stroke and clears the card - it is never a step
+function dismissTitle(){
+  const t=$("titlecard");
+  if (t.classList.contains('show')){ t.classList.remove('show'); clearTimeout(showTitle._t); }
 }
 
 /* ---------------- boot ---------------- */

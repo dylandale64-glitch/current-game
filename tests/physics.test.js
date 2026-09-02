@@ -219,6 +219,42 @@ const state = (page) => page.evaluate(() => ({
   ok(chap.bad.length === 0, 'bosses bite but stay winnable');
   if (chap.bad.length) console.log('   ' + JSON.stringify(chap.bad.slice(0, 4)));
 
+  console.log('\n== what a returning player is told, and what it costs them ==');
+  const strip = await page.evaluate(() => {
+    const card = document.getElementById('titlecard');
+    const out = {};
+    // a first-timer gets identity only, no state they do not have yet
+    META.runs = 0; META.streak = 0; META.rp = 0; META.best = 0; META.dailyDay = null;
+    showTitle(); out.firstTimer = document.getElementById('titlesub').textContent;
+    // a returning player is told what they have
+    META.runs = 9; META.streak = 6; META.rp = 400; META.best = 6420;
+    META.dailyDay = null; META.up = { copper:0,stock:0,reserves:0,substrate:0,lamps:0,solder:0 };
+    showTitle();
+    const txt = document.getElementById('titlesub').textContent;
+    out.returning = txt;
+    out.mentions = { streak: txt.includes('6-day streak'), daily: txt.includes('daily board waiting'),
+                     best: txt.includes('6,420'), rp: txt.includes('400 RP'),
+                     labReady: txt.includes('Lab:') };
+    // a daily already done today is not advertised as waiting
+    META.dailyDay = dayNum(); showTitle();
+    out.hidesDoneDaily = !document.getElementById('titlesub').textContent.includes('waiting');
+    // it must never be a step: no pointer events, and the first touch clears it
+    META.dailyDay = null; showTitle();
+    out.showingBefore = card.classList.contains('show');
+    out.pointerEvents = getComputedStyle(card).pointerEvents;
+    dismissTitle();
+    out.showingAfter = card.classList.contains('show');
+    return out;
+  });
+  console.log('  ', JSON.stringify(strip));
+  ok(strip.firstTimer === '', 'a first-time player is shown no state they do not have');
+  ok(strip.mentions.streak && strip.mentions.daily && strip.mentions.best && strip.mentions.rp,
+     'a returning player is told their streak, waiting daily, best and banked research');
+  ok(strip.mentions.labReady, 'an affordable upgrade is called out by name');
+  ok(strip.hidesDoneDaily, 'a daily already cleared today is not advertised as waiting');
+  ok(strip.pointerEvents === 'none' && strip.showingBefore && !strip.showingAfter,
+     'the card blocks nothing and the first touch clears it');
+
   console.log('\n== the daily board ==');
   const daily = await page.evaluate(() => {
     const snap = () => JSON.stringify({ t:S.type, src:S.src, lamps:S.lamps.map(l=>[l.x,l.y]),
