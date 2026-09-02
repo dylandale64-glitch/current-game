@@ -219,6 +219,78 @@ const state = (page) => page.evaluate(() => ({
   ok(chap.bad.length === 0, 'bosses bite but stay winnable');
   if (chap.bad.length) console.log('   ' + JSON.stringify(chap.bad.slice(0, 4)));
 
+  console.log('\n== the daily board ==');
+  const daily = await page.evaluate(() => {
+    const snap = () => JSON.stringify({ t:S.type, src:S.src, lamps:S.lamps.map(l=>[l.x,l.y]),
+                                        obs:S.obs.map(o=>[o.x,o.y,o.w,o.h]), v:+S.volts.toFixed(4),
+                                        b:+S.budget.toFixed(4) });
+    const out = {};
+    // same day, same board - twice in a row
+    startDaily(); const a = snap();
+    startDaily(); const b = snap();
+    out.deterministic = (a === b);
+    // lab upgrades must not change the shared puzzle
+    const savedUp = JSON.parse(JSON.stringify(META.up)), savedSkill = META.skill;
+    META.up.copper = 3; META.up.stock = 3; META.up.reserves = 3; META.skill = 1.3;
+    startDaily(); out.ignoresUpgrades = (snap() === a);
+    META.up = savedUp; META.skill = savedSkill;
+    out.mods = S.mods.rho === 1 && S.mods.wmax === 1 && S.mods.budget === 1;
+
+    // streak arithmetic
+    const day = dayNum();
+    const run = (lastDay, freezes) => {
+      META.dailyDay = lastDay; META.streak = 5; META.freezes = freezes;
+      META.daysPlayed = 3;                       // not a multiple of 5
+      completeDaily(50);
+      return { streak: META.streak, freezes: META.freezes };
+    };
+    out.consecutive = run(day - 1, 0);           // yesterday -> 6
+    out.gapWithFuse = run(day - 2, 1);           // missed one, had a fuse -> 6, fuse spent
+    out.gapNoFuse   = run(day - 2, 0);           // missed one, no fuse -> resets to 1
+    out.longGap     = run(day - 9, 2);           // long absence -> resets, fuse kept
+
+    // replaying the same day must not double count
+    META.dailyDay = null; META.streak = 0; META.daysPlayed = 0; META.freezes = 0;
+    completeDaily(40); const first = META.streak;
+    completeDaily(90); out.sameDay = { streak: META.streak, unchanged: META.streak === first,
+                                       best: META.dailyBest };
+    // a fuse is earned every fifth day played, capped
+    META.daysPlayed = 4; META.freezes = 0; META.dailyDay = dayNum() - 1;
+    completeDaily(10); out.earnedFuse = META.freezes;
+    META.daysPlayed = 9; META.freezes = 2; META.dailyDay = dayNum() - 1;
+    completeDaily(10); out.fuseCap = META.freezes;
+    return out;
+  });
+  console.log('  ', JSON.stringify(daily));
+  ok(daily.deterministic, 'the daily board is identical for the same day');
+  ok(daily.ignoresUpgrades && daily.mods, 'the daily ignores lab upgrades so everyone solves the same puzzle');
+  ok(daily.consecutive.streak === 6, 'playing yesterday and today extends the streak');
+  ok(daily.gapWithFuse.streak === 6 && daily.gapWithFuse.freezes === 0,
+     'a spare fuse covers one missed day and is spent doing it');
+  ok(daily.gapNoFuse.streak === 1, 'a missed day with no fuse resets the streak');
+  ok(daily.longGap.streak === 1 && daily.longGap.freezes === 2,
+     'a long absence resets the streak without eating a fuse');
+  ok(daily.sameDay.unchanged && daily.sameDay.best === 90,
+     'replaying the same day does not double count, but a better solve still records');
+  ok(daily.earnedFuse === 1 && daily.fuseCap === 2, 'a fuse is earned every fifth day, capped at two');
+
+  console.log('\n== a failed daily costs an attempt, not the streak ==');
+  const retry = await page.evaluate(() => {
+    startDaily();
+    const before = JSON.stringify({ src:S.src, lamps:S.lamps.map(l=>[l.x,l.y]) });
+    const streakBefore = META.streak;
+    S.lastFail = 'BURNED'; S.failText = ['Burned out','x']; S.daily = true;
+    afterBurn();
+    return { stillDaily: S.daily, phase: S.phase,
+             sameBoard: JSON.stringify({ src:S.src, lamps:S.lamps.map(l=>[l.x,l.y]) }) === before,
+             streakKept: META.streak === streakBefore,
+             overShowing: document.getElementById('over').classList.contains('show') };
+  });
+  console.log('  ', JSON.stringify(retry));
+  ok(retry.stillDaily && retry.phase === 'draw' && retry.sameBoard,
+     'failing the daily puts the same board back, unlimited attempts');
+  ok(!retry.overShowing && retry.streakKept, 'a failed attempt does not end anything or cost the streak');
+
   console.log('\n== mute ==');
   const muted = await page.evaluate(() => {
     document.getElementById('mute').click();

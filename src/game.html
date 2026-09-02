@@ -238,10 +238,10 @@
            <div class="obig" id="over-big">Burned out</div></div>
       <div id="overwhy"></div>
       <div id="stats">
-        <div><span class="k">Stages</span><span class="v" id="s-stage">0</span></div>
-        <div><span class="k">Score</span><span class="v" id="s-score">0</span></div>
-        <div><span class="k">Best</span><span class="v" id="s-best">0</span></div>
-        <div><span class="k">Research</span><span class="v" id="s-rp">0</span></div>
+        <div><span class="k" id="s-stage-k">Stages</span><span class="v" id="s-stage">0</span></div>
+        <div><span class="k" id="s-score-k">Score</span><span class="v" id="s-score">0</span></div>
+        <div><span class="k" id="s-best-k">Best</span><span class="v" id="s-best">0</span></div>
+        <div><span class="k" id="s-rp-k">Research</span><span class="v" id="s-rp">0</span></div>
       </div>
       <div id="unlockbar">
         <div class="lab"><span id="ubname">&mdash;</span><span id="ubval"></span></div>
@@ -249,6 +249,7 @@
       </div>
       <div class="btnrow">
         <button class="btn" id="again">Run again</button>
+        <button class="btn ghost" id="todaily">Daily</button>
         <button class="btn ghost" id="tolab">Lab</button>
       </div>
     </div>
@@ -307,7 +308,18 @@ const CFG = {
 const $ = (id)=>document.getElementById(id);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
-const rand=(a,b)=>a+Math.random()*(b-a);
+// Board generation draws from RND, not Math.random, so the daily board can be
+// seeded from the date and come out identical for everyone. Audio noise keeps
+// using Math.random; it is not part of the puzzle.
+let RND = Math.random;
+const mulberry32 = (a)=>()=>{
+  a |= 0; a = (a + 0x6D2B79F5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const dayNum = ()=> Math.floor(Date.now()/86400000);
+const rand=(a,b)=>a+RND()*(b-a);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const mA=(x)=>Math.round(x*1000);
 
@@ -401,7 +413,8 @@ const UPG = [
   {id:'lamps',    n:'Rated lamps',    d:'Filaments take more current before they go.',   max:3, eff:'I max +5% / level',   cost:l=>55+l*65},
   {id:'solder',   n:'Spare solder',   d:'One more re-solder attempt in every run.',      max:2, eff:'+1 re-solder',       cost:l=>80+l*140}
 ];
-const DEF_META = { rp:0, best:0, runs:0, skill:1, muted:false, taught:false, up:{copper:0,stock:0,reserves:0,substrate:0,lamps:0,solder:0} };
+const DEF_META = { rp:0, best:0, runs:0, skill:1, muted:false, taught:false,
+  dailyDay:null, streak:0, freezes:0, daysPlayed:0, dailyBest:0, up:{copper:0,stock:0,reserves:0,substrate:0,lamps:0,solder:0} };
 let META = JSON.parse(JSON.stringify(DEF_META));
 function load(){ try{ const r=localStorage.getItem('current.save.v2');
   if(r){ const o=JSON.parse(r); META={...DEF_META,...o, up:{...DEF_META.up,...(o.up||{})}}; } }catch(e){} }
@@ -428,7 +441,7 @@ const S = {
   volts:12, budget:5, copperUsed:0, fuse:1,
   bi:0, viaHit:false, drawing:false,
   liveT:0, maxHeat:0, burn:null, supplyI:0,
-  chain:0, solder:1, rpRun:0, breather:false, needBreather:false, sawChain:false, freeze:0,
+  chain:0, solder:1, rpRun:0, daily:false, breather:false, needBreather:false, sawChain:false, freeze:0,
   parts:[], shake:0, slowmo:0, dashOff:0, taught:false, hintLevel:0,
   mods:{rho:1,burn:1,cool:1,wmax:1,wmin:1,budget:1,imax:1,volt:1,score:1,diff:1}
 };
@@ -473,7 +486,7 @@ function boardType(stage){
   if (stage === 4) return 'series';   // meet series, then the chapter 1 boss tests it
   if (stage === 7) return 'parallel'; // meet parallel at the top of chapter 2
   if (stage <  7)  return 'single';
-  const r=Math.random();
+  const r=RND();
   return r < 0.42 ? 'single' : r < 0.71 ? 'series' : 'parallel';
 }
 
@@ -513,7 +526,7 @@ function genBoard(){
                 {pts:[],heat:[],lamps:[1],done:false,R:0,I:0,copper:0}];
   } else if (S.type === 'series'){
     const nL = (S.boss && S.boss.kind==='triple') ? 3 : 2;
-    const mid=BH/2+rand(-BH*0.08,BH*0.08); let flip=Math.random()<0.5?-1:1;
+    const mid=BH/2+rand(-BH*0.08,BH*0.08); let flip=RND()<0.5?-1:1;
     S.src={ x:rand(0.9,1.5), y:clamp(mid-rand(BH*0.16,BH*0.28)*flip,1.2,BH-1.2) };
     S.lamps=[];
     for (let i=0;i<nL;i++){
@@ -525,7 +538,7 @@ function genBoard(){
     }
     S.branches=[{pts:[],heat:[],lamps:S.lamps.map((_,i)=>i),done:false,R:0,I:0,copper:0}];
   } else {
-    const mid=BH/2+rand(-BH*0.09,BH*0.09), flip=Math.random()<0.5?-1:1;
+    const mid=BH/2+rand(-BH*0.09,BH*0.09), flip=RND()<0.5?-1:1;
     const half=rand(BH*0.17,BH*0.34)*((S.boss&&S.boss.spread)||1);
     S.src={ x:rand(0.9,1.7), y:clamp(mid-half*flip,1.2,BH-1.2) };
     S.lamps=[{x:rand(BW-1.7,BW-0.9),y:clamp(mid+half*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
@@ -539,7 +552,7 @@ function genBoard(){
   if (S.boss && S.boss.obs) n = Math.max(0, n + S.boss.obs);
   let guard=0;
   while (S.obs.length<n && guard++<300){
-    const tgt = S.lamps[(Math.random()*S.lamps.length)|0];
+    const tgt = S.lamps[(RND()*S.lamps.length)|0];
     const t=rand(0.20,0.80);
     const kx=lerp(S.src.x,tgt.x,t)+rand(-0.9,0.9);
     const ky=lerp(S.src.y,tgt.y,t)+rand(-1.7,1.7);
@@ -553,7 +566,7 @@ function genBoard(){
 
   // supply sized to this board's geometry so difficulty is layout-independent
   const teaching = isTeaching(S.stage);
-  let ramp = (1 + CFG.V_RAMP*(S.stage-1)*META.skill)
+  let ramp = (1 + CFG.V_RAMP*(S.stage-1)*(S.daily ? 1 : META.skill))
            * (S.breather ? 0.80 : 1) * (teaching ? 0.86 : 1);
   let boost = 1;
   const size = ()=>{
@@ -822,6 +835,7 @@ function fail(kind){
 }
 
 function afterBurn(){
+  if (S.daily){ startDaily(); return; }   // unlimited attempts: the barrier stays low
   const kind=S.lastFail;
   if (kind==='BURNED' && S.solder>0){
     S.phase='offer';
@@ -837,6 +851,13 @@ function cancelPending(){ clearTimeout(pendTimer); pendTimer=null; }
 
 function succeed(){
   S.phase='result'; A.hum(0,0); A.ding();
+  if (S.daily){
+    const head = Math.round((1-clamp(S.maxHeat,0,1))*100);
+    completeDaily(head);
+    flash('Daily clear','var(--copper)','streak ' + META.streak + '   ·   ' + head + '% headroom');
+    later(()=>dailyResult(head), 1500);
+    return;
+  }
   S.chain++; if (S.chain>1) A.chain(S.chain);
   const eff=1-clamp(S.copperUsed/S.budget,0,1);
   const cool=1-clamp(S.maxHeat,0,1);
@@ -873,7 +894,12 @@ function endRun(){
   $("s-best").textContent=META.best;
   $("s-rp").textContent='+'+S.rpRun;
   unlockBar();
+  $("over-title").textContent = 'Run ended';
+  setText('s-stage-k','Stages'); setText('s-score-k','Score');
+  setText('s-best-k','Best'); setText('s-rp-k','Research');
   $("tolab").style.display = META.runs>=2 ? '' : 'none';
+  $("unlockbar").style.display = '';
+  dailyButton();
   $("over").classList.add("show");
 }
 
@@ -899,7 +925,8 @@ function banner(){
   let t='';
   if (S.breather && S.phase==='draw' && !S.branches.some(b=>b.pts.length)) t='Breather — supply eased off';
   else
-  if (S.type==='parallel' && S.branches.length>1 && S.phase==='draw')
+  if (S.daily && S.phase==='draw') t='Everyone gets this board today';
+  else if (S.type==='parallel' && S.branches.length>1 && S.phase==='draw')
     t = allDone()?'':'Branch '+(S.bi+1)+' of 2  ·  fuse '+mA(S.fuse)+' mA';
   else if (S.type==='series' && S.phase==='draw')
     t = S.viaHit ? 'Now on to the second lamp' : 'Series — run the trace through both lamps';
@@ -959,9 +986,79 @@ $("tolab").addEventListener("click",()=>{
 $("labclose").addEventListener("click",()=>{
   $("lab").classList.remove("show"); unlockBar(); $("over").classList.add("show"); });
 
+/* ---------------- the daily board ---------------- */
+// Everyone gets the same board each day, seeded from the date, with lab
+// upgrades and personal difficulty adaptation switched off so it is the same
+// puzzle for everyone.
+//
+// Deliberately easy to keep: unlimited retries, and the streak asks only that
+// you clear it. Duolingo ran 600 experiments and found that making a streak
+// EASIER to maintain increased long-term engagement - the streak and the
+// ambitious goal should be separate things. Here the ambitious goal is your
+// best thermal headroom, tracked but never required.
+//
+// A missed day is covered by a spare fuse, and spare fuses are earned by
+// playing, never sold. No copy anywhere asks you not to give up.
+function startDaily(){
+  cancelPending();
+  ['over','draft','resolder','lab'].forEach(id=>$(id).classList.remove('show'));
+  S.daily = true; S.stage = 5; S.chain = 0; S.score = 0; S.solder = 0; S.parts = [];
+  S.mods = { rho:1, burn:1, cool:1, wmax:1, wmin:1, budget:1, imax:1, volt:1, score:1, diff:1 };
+  RND = mulberry32((dayNum() * 2654435761) >>> 0);
+  genBoard();
+  RND = Math.random;          // only the board is seeded, nothing after it
+  banner();
+}
+
+function dailyDone(){ return META.dailyDay === dayNum(); }
+
+function completeDaily(headroom){
+  if (headroom > (META.dailyBest||0)) META.dailyBest = headroom;
+  const d = dayNum();
+  if (META.dailyDay !== d){
+    const gap = META.dailyDay === null ? 999 : d - META.dailyDay;
+    if (gap === 1) META.streak++;
+    else if (gap === 2 && META.freezes > 0){ META.freezes--; META.streak++; }  // a spare fuse covers one missed day
+    else META.streak = 1;
+    META.dailyDay = d;
+    META.daysPlayed = (META.daysPlayed||0) + 1;
+    if (META.daysPlayed % 5 === 0) META.freezes = Math.min(2, (META.freezes||0) + 1);
+  }
+  save();
+}
+
+function dailyResult(headroom){
+  S.daily = false;
+  $("over-title").textContent = 'Daily board';
+  $("over-big").textContent   = 'Daily clear';
+  $("overwhy").innerHTML = META.freezes
+    ? 'You are holding ' + META.freezes + ' spare fuse' + (META.freezes>1?'s':'') +
+      '. A spare fuse covers one missed day.'
+    : 'Play five days to earn a spare fuse. It covers one missed day.';
+  setText('s-stage-k','Streak'); setText('s-score-k','Headroom'); setText('s-best-k','Your best');
+  $("s-stage").textContent = String(META.streak);
+  $("s-score").textContent = headroom + '%';
+  $("s-best").textContent  = (META.dailyBest||0) + '%';
+  $("s-rp").textContent    = String(META.freezes||0);
+  setText('s-rp-k','Fuses');
+  $("unlockbar").style.display = 'none';
+  $("tolab").style.display = META.runs>=2 ? '' : 'none';
+  $("todaily").style.display = 'none';
+  $("over").classList.add("show");
+}
+
+function dailyButton(){
+  const b = $("todaily");
+  b.style.display = '';
+  if (dailyDone()) { b.textContent = 'Daily done · ' + META.streak; b.disabled = true; }
+  else { b.textContent = META.streak ? 'Daily · streak ' + META.streak : 'Daily board'; b.disabled = false; }
+}
+$("todaily").addEventListener("click", ()=>{ if(!dailyDone()) startDaily(); });
+
 /* ---------------- run control ---------------- */
 function newRun(){
   cancelPending();
+  S.daily = false;
   $("draft").classList.remove("show"); $("resolder").classList.remove("show");
   $("over").classList.remove("show"); $("lab").classList.remove("show");
   S.stage=1; S.score=0; S.chain=0; S.parts=[]; S.sawChain=false; S.needBreather=false;
@@ -1169,8 +1266,12 @@ function frame(now){
 
 function chapterUI(){
   const st=S.stage, ch=chapter(st);
-  setHTML('chapname', ch.name + ' <b>&middot; sector ' + chapNum(st) + '</b>');
+  setHTML('chapname', S.daily
+    ? 'Daily board <b>&middot; ' + (META.streak ? 'streak ' + META.streak : 'same for everyone') + '</b>'
+    : ch.name + ' <b>&middot; sector ' + chapNum(st) + '</b>');
   const pips=$('chappips');
+  pips.style.display = S.daily ? 'none' : '';
+  if (S.daily) return;
   if (pips.childElementCount !== CFG.CHAPTER_LEN){
     pips.innerHTML='';
     for(let i=1;i<=CFG.CHAPTER_LEN;i++){
