@@ -33,6 +33,12 @@ budget, one fuse).
 
 ## Running it
 
+On Windows, double-click **`setup.cmd`** once (installs dependencies, fetches the test
+browser, runs the suite), then **`play.cmd`** any time you want to play. Needs Node.js
+installed; if `setup.cmd` closes instantly, that is what is missing.
+
+Or by hand:
+
 ```
 npm install
 npm run build     # wraps src/game.html into a standalone index.html
