@@ -366,6 +366,10 @@ function boardType(stage){
 
 function genBoard(){
   if (typeof cancelPending==='function') cancelPending();
+  // A new board owns the screen. Without this, an overlay left showing from a
+  // previous outcome sits on top of the canvas and silently swallows every
+  // touch — the board looks playable and does not respond.
+  ['over','draft','resolder','lab'].forEach(id=>{ const e=$(id); if(e) e.classList.remove('show'); });
   const BW=CFG.BW;
   S.type = boardType(S.stage);
   S.lamps=[]; S.obs=[]; S.branches=[]; S.bi=0; S.viaHit=false;

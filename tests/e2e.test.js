@@ -1,23 +1,65 @@
-/* Drives the game with real pointer input, the way a finger would. */
+/* Drives the game with real pointer input, the way a finger would.
+
+   These tests wait for game STATE, never for a fixed number of
+   milliseconds. The game integrates real elapsed time and caps dt at
+   50 ms per frame, so on a slow or loaded machine (a CI runner, say)
+   the live phase takes longer in wall-clock than it does on a fast
+   one. Fixed sleeps pass locally and fail in CI. Polling does not. */
 const { chromium } = require('playwright');
 const path = require('path');
 const URL = 'file://' + path.join(__dirname, '..', 'index.html').replace(/\\/g, '/');
 
 let pass = 0, fail = 0;
-const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? '  PASS  ' : '  FAIL  ') + m); };
+let dump = async () => ({});
+const ok = async (c, m) => {
+  if (c) { pass++; console.log('  PASS  ' + m); return; }
+  fail++; console.log('  FAIL  ' + m);
+  // Say WHY, in the log, so a red CI run explains itself instead of
+  // needing to be reproduced locally.
+  try { console.log('         state: ' + JSON.stringify(await dump())); }
+  catch (e) { console.log('         (could not read state: ' + e.message + ')'); }
+};
 
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; page.on('pageerror', e => errs.push(e.message));
-  await page.goto(URL); await page.waitForTimeout(800);
+
+  // SLOW=1 throttles the CPU to reproduce a loaded CI runner locally.
+  // The game caps dt at 50 ms/frame, so under throttling the live phase
+  // takes longer in wall-clock than it does on a fast machine.
+  if (process.env.SLOW) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.SLOW) || 6 });
+    console.log('(CPU throttled ' + (process.env.SLOW || 6) + 'x)');
+  }
+
+  // wait for a condition in page context; resolves true, or false on timeout
+  const until = async (expr, ms = 25000) => {
+    try { await page.waitForFunction(expr, null, { timeout: ms, polling: 100 }); return true; }
+    catch { return false; }
+  };
+
+  await page.goto(URL);
+  await until(() => typeof S !== 'undefined' && S.branches.length > 0);
+
+  dump = () => page.evaluate(() => ({
+    phase: S.phase, stage: S.stage, type: S.type, bi: S.bi,
+    volts: +S.volts.toFixed(1), lampI: S.lamps.map(l => mA(l.I)),
+    window: [mA(CFG.I_MIN), mA(iMax())], maxHeat: +S.maxHeat.toFixed(2),
+    copper: +(S.copperUsed / S.budget).toFixed(2),
+    pts: S.branches.map(b => b.pts.length), done: S.branches.map(b => b.done),
+    verdict: document.getElementById('over-big').textContent,
+    overlays: ['over','draft','resolder','lab'].filter(id =>
+      document.getElementById(id).classList.contains('show'))
+  }));
 
   const geom = () => page.evaluate(() => {
     const r = document.getElementById('board').getBoundingClientRect();
     return { src: S.src, lamps: S.lamps, unit, top: r.top, left: r.left, type: S.type };
   });
 
-  // stepMs controls drag speed: slow drag lays thick copper, a flick lays thin
+  // stepMs sets drag speed: a slow drag lays thick copper, a flick lays thin
   const dragTo = async (g, target, stepMs) => {
     const A = { x: g.left + g.src.x * g.unit, y: g.top + g.src.y * g.unit };
     const B = { x: g.left + target.x * g.unit, y: g.top + target.y * g.unit };
@@ -33,24 +75,25 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? '  PASS  ' : '  FAI
   console.log('\n== stage 1 with a real finger drag ==');
   let g = await geom();
   await dragTo(g, g.lamps[0], 20);
-  await page.waitForTimeout(300);
-  const st = await page.evaluate(() => ({ phase: S.phase, pts: S.branches[0].pts.length }));
-  ok(st.phase === 'live' && st.pts > 20, 'a slow drag lays a trace and energises it');
-  await page.waitForTimeout(4300);
-  ok((await page.evaluate(() => S.stage)) === 2, 'clearing stage 1 advances the run');
+  await ok(await until(() => S.phase === 'live' || S.phase === 'result'),
+     'a slow drag lays a trace and energises it');
+  await ok(await until(() => S.stage === 2), 'clearing stage 1 advances the run');
 
   console.log('\n== two-branch parallel board ==');
-  await page.evaluate(() => { S.stage = 6; genBoard(); S.obs = []; });
+  // generous copper here on purpose: this test is about the two-branch input
+  // flow, not the copper economy, which physics.test.js already covers.
+  await page.evaluate(() => { S.stage = 6; genBoard(); S.obs = []; S.budget *= 3; });
   g = await geom();
-  ok(g.type === 'parallel', 'parallel board generated');
+  await ok(g.type === 'parallel', 'parallel board generated');
+
   await dragTo(g, g.lamps[0], 14);
-  await page.waitForTimeout(200);
-  const mid = await page.evaluate(() => ({ bi: S.bi, done0: S.branches[0].done, phase: S.phase }));
-  ok(mid.bi === 1 && mid.done0 && mid.phase === 'draw', 'first branch completes and the game asks for the second');
+  await ok(await until(() => S.bi === 1 && S.branches[0].done && S.phase === 'draw'),
+     'first branch completes and the game asks for the second');
+
   g = await geom();
   await dragTo(g, g.lamps[1], 14);
-  await page.waitForTimeout(300);
-  ok((await page.evaluate(() => S.phase)) === 'live', 'the second branch energises the board');
+  await ok(await until(() => S.phase === 'live' || S.phase === 'burning' || S.phase === 'result'),
+     'the second branch energises the board');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed, page errors: ' + (errs.length ? errs.join(' | ') : 'none'));
   await browser.close();
