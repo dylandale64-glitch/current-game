@@ -529,17 +529,25 @@ cv.addEventListener("pointerdown",(e)=>{
   b.pts=[{x:S.src.x,y:S.src.y,w:wMax()}]; b.heat=[0]; b.done=false; b.copper=0;
   S.copperUsed=totalCopper();
   S.viaHit=false; S.drawing=true; curW=wMax();
-  last={x:S.src.x,y:S.src.y}; lastT=performance.now();
+  last={x:S.src.x,y:S.src.y}; lastT=(e.timeStamp||performance.now());
   A.clack();
 });
 
 cv.addEventListener("pointermove",(e)=>{
   if(!S.drawing) return; e.preventDefault();
-  const b=curBranch(), p=toU(e), now=performance.now();
-  const dt=Math.max((now-lastT)/1000,0.001), d=dist(p,last);
+  // Trace width comes from drag speed, so how we time the drag matters.
+  // performance.now() inside the handler measures when the browser got round
+  // to calling us, not when the finger moved — and browsers coalesce pointer
+  // events under load, so a steady drag can arrive as a burst and read as a
+  // flick. e.timeStamp is the browser's own event time and is immune to that.
+  const b=curBranch(), p=toU(e), now=(e.timeStamp||performance.now());
+  // 8 ms floor: no real finger outruns 125 Hz, so anything quicker is an
+  // event-delivery artefact rather than the player actually flicking.
+  const dt=Math.max((now-lastT)/1000,0.008), d=dist(p,last);
   if (d<CFG.STEP*0.75) return;
 
-  drawSpeed=lerp(drawSpeed,d/dt,0.4);
+  const sample=Math.min(d/dt, CFG.SPEED_MAX*1.5);
+  drawSpeed=lerp(drawSpeed,sample,0.4);
   const target=lerp(wMax(),wMin(),clamp(drawSpeed/CFG.SPEED_MAX,0,1));
   A.scratch(clamp(drawSpeed/CFG.SPEED_MAX,0,1)*0.9+0.1);
 
