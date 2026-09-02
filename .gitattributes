@@ -1,4 +1,5 @@
-# These files were authored on Linux and will be edited on Windows.
-# Normalise line endings in the repo so diffs stay readable.
+# Authored on Linux, edited on Windows. Normalise line endings in the repo.
 * text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
 *.png binary
