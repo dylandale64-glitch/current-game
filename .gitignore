@@ -1,0 +1,6 @@
+node_modules/
+index.html
+shots/
+*.log
+.DS_Store
+Thumbs.db
