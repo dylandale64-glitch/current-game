@@ -12,6 +12,7 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log((c ? '  PASS  ' : '  FAI
 const draw = (page, bi, w, pinch) => page.evaluate(({ bi, w, pinch }) => {
   const b = S.branches[bi]; b.pts = []; b.heat = [];
   const stops = [S.src].concat(b.lamps.map(i => S.lamps[i]));
+  b.copper = 0;
   for (let s = 0; s < stops.length - 1; s++) {
     const a = stops[s], c = stops[s + 1], n = 45;
     for (let i = (s === 0 ? 0 : 1); i <= n; i++) {
@@ -20,11 +21,11 @@ const draw = (page, bi, w, pinch) => page.evaluate(({ bi, w, pinch }) => {
       if (pinch && s === 0 && Math.abs(t - pinch.at) < pinch.len) ww = pinch.w;
       const x = a.x + (c.x - a.x) * t, y = a.y + (c.y - a.y) * t;
       const p = b.pts[b.pts.length - 1];
-      if (p) S.copperUsed += Math.hypot(x - p.x, y - p.y) * ww;
+      if (p) b.copper = (b.copper || 0) + Math.hypot(x - p.x, y - p.y) * ww;
       b.pts.push({ x, y, w: ww }); b.heat.push(0);
     }
   }
-  b.done = true; solve();
+  b.done = true; S.copperUsed = totalCopper(); solve();
   return { R: +b.R.toFixed(2), I: +(b.I * 1000).toFixed(0) };
 }, { bi, w, pinch });
 
@@ -119,6 +120,58 @@ const state = (page) => page.evaluate(() => ({
   await page.click('#do-resolder'); await page.waitForTimeout(300);
   s = await state(page);
   ok(s.phase === 'draw' && s.solder === 0 && s.chain === 0, 're-solder resumes play, spends the charge, resets the chain');
+
+  console.log('\n== a slip must not destroy finished work ==');
+  await page.evaluate(() => { S.stage = 6; genBoard(); });
+  await draw(page, 0, 0.30);
+  const before = await page.evaluate(() => ({ done0: S.branches[0].done, pts0: S.branches[0].pts.length,
+                                              copper: +S.copperUsed.toFixed(2) }));
+  // simulate brushing a keep-out zone while drawing the second branch
+  await page.evaluate(() => {
+    S.bi = 1; const b = S.branches[1];
+    b.pts = [{ x: S.src.x, y: S.src.y, w: 0.3 }]; b.heat = [0]; b.copper = 0.4;
+    S.copperUsed = totalCopper();
+    S.drawing = true; endStroke(false);
+  });
+  const after = await page.evaluate(() => ({ done0: S.branches[0].done, pts0: S.branches[0].pts.length,
+                                             pts1: S.branches[1].pts.length, copper: +S.copperUsed.toFixed(2) }));
+  console.log('   before', JSON.stringify(before), 'after', JSON.stringify(after));
+  ok(after.done0 === true && after.pts0 === before.pts0, 'the finished branch survives a slip on the next one');
+  ok(after.pts1 === 0, 'the branch being drawn is cleared');
+  ok(Math.abs(after.copper - before.copper) < 0.01, 'copper spent on the aborted stroke is refunded');
+
+  console.log('\n== sawtooth pacing ==');
+  const pace = await page.evaluate(() => {
+    const out = {};
+    S.needBreather = false; S.stage = 4; genBoard();
+    out.teachingStageNotEased = (S.breather === false && S.type === 'series');
+    S.needBreather = false; S.stage = 6; genBoard();
+    out.parallelStageNotEased = (S.breather === false && S.type === 'parallel');
+    S.stage = 9; S.needBreather = true; genBoard();
+    const d = Math.hypot(S.lamps[0].x - S.src.x, S.lamps[0].y - S.src.y);
+    const load = S.branches[0].lamps.length * CFG.R_LOAD;
+    const unEased = CFG.I_REF * (rho() * d / CFG.W_REF + load)
+                  * (1 + CFG.V_RAMP * (S.stage - 1) * META.skill);
+    out.breather = S.breather;
+    out.volts = +S.volts.toFixed(1);
+    out.sameBoardUneased = +unEased.toFixed(1);
+    out.easedV = S.volts < unEased * 0.95;
+    out.singleLamp = S.lamps.length === 1;
+    return out;
+  });
+  console.log('  ', JSON.stringify(pace));
+  ok(pace.teachingStageNotEased, 'stage 4 still teaches series, never eased into a breather');
+  ok(pace.parallelStageNotEased, 'stage 6 still teaches parallel');
+  ok(pace.breather && pace.easedV && pace.singleLamp, 'a close call schedules an easier next board');
+
+  console.log('\n== mute ==');
+  const muted = await page.evaluate(() => {
+    document.getElementById('mute').click();
+    return { flag: META.muted, cls: document.getElementById('mute').classList.contains('off'),
+             stored: JSON.parse(localStorage.getItem('current.save.v2')).muted };
+  });
+  ok(muted.flag && muted.cls && muted.stored === true, 'mute toggles, shows state and persists');
+  await page.evaluate(() => document.getElementById('mute').click());
 
   console.log('\n== research and the lab ==');
   await page.evaluate(() => { S.solder = 0; S.score = 900; S.stage = 6; endRun(); });

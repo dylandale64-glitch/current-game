@@ -31,8 +31,9 @@
   #cell-volts .v{color:var(--copper)}
   #cell-combo .v{color:var(--ok)}
   #cell-combo.flat .v{color:var(--dim)}
+  .cell.hidden{display:none}
   #copperbar{height:4px;background:#0C0F10;border-radius:2px;overflow:hidden;margin-top:2px}
-  #copperfill{height:100%;width:100%;background:var(--copper);transition:width .08s linear,background .25s}
+  #copperfill{height:100%;width:100%;background:var(--copper);transition:width .16s cubic-bezier(.22,.68,.24,1),background .25s}
   #copperfill.low{background:var(--hot)}
 
   /* board */
@@ -42,6 +43,14 @@
         font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);
         pointer-events:none;transition:opacity .4s;line-height:1.95}
   #hint b{color:var(--muted)}
+  #titlecard{position:absolute;left:0;right:0;top:30%;text-align:center;pointer-events:none;
+             opacity:0;transition:opacity .7s ease-out}
+  #titlecard.show{opacity:1}
+  #titlecard .tn{font-family:var(--f-disp);font-size:min(52px,11.5vw);font-weight:700;
+                 letter-spacing:.26em;text-transform:uppercase;color:var(--copper);
+                 text-indent:.26em;line-height:1;display:block}
+  #titlecard .ts{display:block;font-family:var(--f-mono);font-size:11px;color:var(--dim);
+                 margin-top:12px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
   #banner{position:absolute;left:0;right:0;top:12px;text-align:center;font-family:var(--f-disp);
           font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
           color:var(--cold);pointer-events:none;opacity:0;transition:opacity .35s}
@@ -52,8 +61,8 @@
                 letter-spacing:.04em;text-transform:none;color:var(--muted);margin-top:7px}
 
   /* meter */
-  #meter{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--edge);
-         padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px}
+  #meter{position:relative;flex:0 0 auto;background:var(--panel);border-top:1px solid var(--edge);
+         padding:10px 62px 12px 14px;display:flex;flex-direction:column;gap:8px}
   #meterhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
   #meterhead .k{font-family:var(--f-disp);font-size:9px;font-weight:600;letter-spacing:.14em;
                 text-transform:uppercase;color:var(--dim)}
@@ -66,13 +75,24 @@
         border-left:1px solid rgba(159,216,168,.5);border-right:1px solid rgba(159,216,168,.5)}
   .gtick{position:absolute;top:0;width:1px;height:5px;background:var(--edge-hi)}
   .gneedle{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--ink);left:0;
-           box-shadow:0 0 7px rgba(237,230,220,.7);transition:left .06s linear,background .15s}
+           box-shadow:0 0 7px rgba(237,230,220,.7);
+           transition:left .14s cubic-bezier(.22,.68,.24,1),background .15s}
   .gneedle.in{background:var(--ok);box-shadow:0 0 9px rgba(159,216,168,.8)}
   .gneedle.over{background:var(--hot);box-shadow:0 0 9px rgba(255,90,60,.9)}
   .glab{position:absolute;left:6px;top:50%;transform:translateY(-50%);font-family:var(--f-disp);
         font-size:8.5px;font-weight:600;letter-spacing:.13em;color:var(--dim);pointer-events:none}
   #gaugelabels{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:9px;
                color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-2px}
+  #mute{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:48px;height:48px;
+        display:flex;align-items:center;justify-content:center;background:none;border:none;
+        cursor:pointer;color:var(--dim);transition:color .12s}
+  #mute:hover,#mute:focus-visible{color:var(--ink);outline:none}
+  #mute svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;
+            stroke-linecap:round;stroke-linejoin:round}
+  #mute .slash{opacity:0}
+  #mute.off{color:var(--hot)}
+  #mute.off .slash{opacity:1}
+  #mute.off .waves{opacity:0}
 
   /* overlays */
   .overlay{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;
@@ -82,9 +102,9 @@
           text-transform:uppercase;color:var(--dim);text-align:center}
   .obig{font-family:var(--f-disp);font-size:31px;font-weight:700;letter-spacing:.05em;
         text-transform:uppercase;color:var(--ink);text-align:center;line-height:1}
-  #cards{display:flex;flex-direction:column;gap:8px;width:100%;max-width:330px}
+  #cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:330px}
   .card{background:var(--panel);border:1px solid var(--edge);border-left:2px solid var(--copper);
-        border-radius:2px;padding:12px 14px;cursor:pointer;text-align:left;display:flex;
+        border-radius:2px;padding:14px 15px;min-height:48px;cursor:pointer;text-align:left;display:flex;
         flex-direction:column;gap:4px;font:inherit;color:inherit;
         transition:border-color .12s,background .12s,transform .08s}
   .card:hover,.card:focus-visible{background:#1B2124;border-left-color:var(--lamp);outline:none}
@@ -99,13 +119,13 @@
   #stats .k{font-family:var(--f-disp);font-size:8.5px;font-weight:600;letter-spacing:.11em;
             text-transform:uppercase;color:var(--dim);display:block;margin-bottom:4px}
   #stats .v{font-family:var(--f-mono);font-size:18px;font-variant-numeric:tabular-nums}
-  .btn{font-family:var(--f-disp);font-size:12.5px;font-weight:700;letter-spacing:.17em;
+  .btn{font-family:var(--f-disp);font-size:13px;font-weight:700;letter-spacing:.17em;
        text-transform:uppercase;background:var(--copper);color:#120A04;border:none;border-radius:2px;
-       padding:13px 30px;cursor:pointer;transition:background .12s}
+       min-height:48px;padding:14px 30px;cursor:pointer;transition:background .12s}
   .btn:hover,.btn:focus-visible{background:#DE8244;outline:none}
   .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--edge)}
   .btn.ghost:hover{background:#1B2124;color:var(--ink)}
-  .btnrow{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .btnrow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
   #overwhy{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:center;
            max-width:300px;line-height:1.55}
   #overwhy b{color:var(--hot);font-weight:500}
@@ -118,8 +138,8 @@
   #rcount{font-family:var(--f-mono);font-size:11.5px;color:var(--dim)}
 
   /* lab */
-  #labgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;width:100%;max-width:360px}
-  .node{background:var(--panel);border:1px solid var(--edge);border-radius:2px;padding:10px 11px;
+  #labgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:360px}
+  .node{background:var(--panel);border:1px solid var(--edge);border-radius:2px;padding:12px 11px;min-height:48px;
         text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;
         gap:5px;transition:border-color .12s,background .12s}
   .node:hover:not(:disabled){background:#1B2124;border-color:var(--copper)}
@@ -147,7 +167,7 @@
     <div class="cell"><span class="k">Stage</span><span class="v" id="v-stage">1</span></div>
     <div class="cell" id="cell-volts"><span class="k">Supply</span><span class="v" id="v-volts">12.0<small>V</small></span></div>
     <div class="cell" id="cell-combo"><span class="k">Chain</span><span class="v" id="v-combo">×1.0</span></div>
-    <div class="cell"><span class="k">Score</span><span class="v" id="v-score">0</span></div>
+    <div class="cell" id="cell-score"><span class="k">Score</span><span class="v" id="v-score">0</span></div>
     <div class="cell" style="flex:1.05"><span class="k">Copper</span>
       <span class="v" id="v-copper">100<small>%</small></span>
       <div id="copperbar"><div id="copperfill"></div></div></div>
@@ -156,6 +176,7 @@
   <div id="stagewrap">
     <canvas id="board"></canvas>
     <div id="banner"></div>
+    <div id="titlecard"><span class="tn">Current</span><span class="ts" id="titlesub"></span></div>
     <div id="hint"></div>
     <div id="verdict"></div>
 
@@ -207,6 +228,11 @@
 
   <div id="meter">
     <div id="meterhead"><span class="k" id="meterlabel">Load current</span><span id="readout">&mdash;</span></div>
+    <button id="mute" aria-label="Mute sound"><svg viewBox="0 0 24 24">
+      <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+      <g class="waves"><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></g>
+      <g class="slash"><path d="M17 9.5l5 5"/><path d="M22 9.5l-5 5"/></g>
+    </svg></button>
     <div id="gauges"></div>
     <div id="gaugelabels"><span>0</span><span id="gmid">450</span><span id="gmax">900 mA</span></div>
   </div>
@@ -253,7 +279,7 @@ const A = {
     if (this.ctx) return;
     const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return;
     const c=new AC(); this.ctx=c;
-    this.master=c.createGain(); this.master.gain.value=0.55; this.master.connect(c.destination);
+    this.master=c.createGain(); this.master.gain.value=META.muted?0:0.55; this.master.connect(c.destination);
     const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate), d=nb.getChannelData(0);
     for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     this.nb=nb;
@@ -305,13 +331,25 @@ const UPG = [
   {id:'lamps',    n:'Rated lamps',    d:'Filaments take more current before they go.',   max:3, eff:'I max +5% / level',   cost:l=>55+l*65},
   {id:'solder',   n:'Spare solder',   d:'One more re-solder attempt in every run.',      max:2, eff:'+1 re-solder',       cost:l=>80+l*140}
 ];
-const DEF_META = { rp:0, best:0, runs:0, skill:1, up:{copper:0,stock:0,reserves:0,substrate:0,lamps:0,solder:0} };
+const DEF_META = { rp:0, best:0, runs:0, skill:1, muted:false, taught:false, up:{copper:0,stock:0,reserves:0,substrate:0,lamps:0,solder:0} };
 let META = JSON.parse(JSON.stringify(DEF_META));
 function load(){ try{ const r=localStorage.getItem('current.save.v2');
   if(r){ const o=JSON.parse(r); META={...DEF_META,...o, up:{...DEF_META.up,...(o.up||{})}}; } }catch(e){} }
 function save(){ try{ localStorage.setItem('current.save.v2', JSON.stringify(META)); }catch(e){} }
 load();
 const lvl = (id)=>META.up[id]||0;
+
+/* ---------------- mute ---------------- */
+function applyMute(){
+  $("mute").classList.toggle('off', !!META.muted);
+  $("mute").setAttribute('aria-label', META.muted ? 'Unmute sound' : 'Mute sound');
+  if (A.ok) A.master.gain.value = META.muted ? 0 : 0.55;
+}
+$("mute").addEventListener('click', (e)=>{
+  e.stopPropagation();
+  META.muted = !META.muted; save(); applyMute();
+  if (!META.muted){ A.init(); A.resume(); A.clack(); }
+});
 
 /* ---------------- run state ---------------- */
 const S = {
@@ -320,7 +358,7 @@ const S = {
   volts:12, budget:5, copperUsed:0, fuse:1,
   bi:0, viaHit:false, drawing:false,
   liveT:0, maxHeat:0, burn:null, supplyI:0,
-  chain:0, solder:1, rpRun:0,
+  chain:0, solder:1, rpRun:0, breather:false, needBreather:false, sawChain:false, freeze:0,
   parts:[], shake:0, slowmo:0, dashOff:0, taught:false, hintLevel:0,
   mods:{rho:1,burn:1,cool:1,wmax:1,wmin:1,budget:1,imax:1,volt:1,score:1,diff:1}
 };
@@ -356,6 +394,7 @@ const px=(u)=>u*unit;
 function rectHit(p,r,pad){ return p.x>r.x-pad&&p.x<r.x+r.w+pad&&p.y>r.y-pad&&p.y<r.y+r.h+pad; }
 
 function boardType(stage){
+  if (S.breather) return 'single';
   if (stage <= 3) return 'single';
   if (stage === 4) return 'series';
   if (stage === 6) return 'parallel';
@@ -366,6 +405,12 @@ function boardType(stage){
 
 function genBoard(){
   if (typeof cancelPending==='function') cancelPending();
+  // Difficulty should be a sawtooth, not a ramp: an easier board after a hard
+  // one gives the curve a rhythm instead of a relentless climb.
+  // Never ease off on a stage that teaches something new (4 = series,
+  // 6 = parallel). Those are mastery moments, not places for a let-up.
+  S.breather = S.stage > 6 && (S.needBreather || S.stage % 5 === 4);
+  S.needBreather = false;
   // A new board owns the screen. Without this, an overlay left showing from a
   // previous outcome sits on top of the canvas and silently swallows every
   // touch — the board looks playable and does not respond.
@@ -379,30 +424,31 @@ function genBoard(){
     // Crafted first board: short, unobstructed, low supply. Teaches by playing.
     S.src = { x:1.4, y:BH*0.68 };
     S.lamps=[{ x:BW-1.4, y:BH*0.34, R:CFG.R_LOAD, I:0, glow:0 }];
-    S.branches=[{ pts:[], heat:[], lamps:[0], done:false, R:0, I:0 }];
+    S.branches=[{ pts:[], heat:[], lamps:[0], done:false, R:0, I:0, copper:0 }];
   } else if (S.type === 'parallel'){
     const mid=BH/2+rand(-BH*0.05,BH*0.05);
     S.src={ x:rand(0.9,1.5), y:mid };
     const sp=rand(BH*0.18,BH*0.30);
     S.lamps=[{x:rand(BW-1.7,BW-0.9),y:clamp(mid-sp,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0},
              {x:rand(BW-1.7,BW-0.9),y:clamp(mid+sp,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
-    S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0},
-                {pts:[],heat:[],lamps:[1],done:false,R:0,I:0}];
+    S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0,copper:0},
+                {pts:[],heat:[],lamps:[1],done:false,R:0,I:0,copper:0}];
   } else if (S.type === 'series'){
     const mid=BH/2+rand(-BH*0.08,BH*0.08), flip=Math.random()<0.5?-1:1;
     S.src={ x:rand(0.9,1.5), y:clamp(mid-rand(BH*0.16,BH*0.28)*flip,1.2,BH-1.2) };
     S.lamps=[{x:rand(BW*0.44,BW*0.58),y:clamp(mid+rand(BH*0.14,BH*0.26)*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0},
              {x:rand(BW-1.7,BW-0.9),  y:clamp(mid-rand(BH*0.10,BH*0.24)*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
-    S.branches=[{pts:[],heat:[],lamps:[0,1],done:false,R:0,I:0}];
+    S.branches=[{pts:[],heat:[],lamps:[0,1],done:false,R:0,I:0,copper:0}];
   } else {
     const mid=BH/2+rand(-BH*0.09,BH*0.09), half=rand(BH*0.17,BH*0.34), flip=Math.random()<0.5?-1:1;
     S.src={ x:rand(0.9,1.7), y:clamp(mid-half*flip,1.2,BH-1.2) };
     S.lamps=[{x:rand(BW-1.7,BW-0.9),y:clamp(mid+half*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
-    S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0}];
+    S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0,copper:0}];
   }
 
   // keep-out zones seeded on the routes
-  const n = S.stage===1 ? 0 : Math.min(Math.floor((S.stage-1)/2)+1, 4);
+  let n = S.stage===1 ? 0 : Math.min(Math.floor((S.stage-1)/2)+1, 4);
+  if (S.breather) n = Math.max(0, n-2);
   let guard=0;
   while (S.obs.length<n && guard++<300){
     const tgt = S.lamps[(Math.random()*S.lamps.length)|0];
@@ -421,7 +467,7 @@ function genBoard(){
   let dSum=0; for (const b of S.branches) dSum += dist(S.src, S.lamps[b.lamps[0]]);
   const dRef = dSum/S.branches.length;
   const loadPer = S.branches[0].lamps.length * CFG.R_LOAD;
-  const ramp = 1 + CFG.V_RAMP*(S.stage-1)*META.skill;
+  const ramp = (1 + CFG.V_RAMP*(S.stage-1)*META.skill) * (S.breather ? 0.80 : 1);
   S.volts = CFG.I_REF*(rho()*dRef/CFG.W_REF + loadPer) * ramp * S.mods.volt;
   S.budget = CFG.BUDGET(dSum) * S.mods.budget * (S.type==='parallel'?0.92:1);
   S.fuse = S.type==='parallel' ? CFG.FUSE_PARALLEL*S.mods.imax : Infinity;
@@ -449,6 +495,15 @@ function solve(){
 }
 const densityAt=(b,i)=> (b.I*b.I*rho())/(b.pts[i].w*b.pts[i].w);
 const curBranch=()=> S.branches[S.bi];
+const totalCopper=()=> S.branches.reduce((t,b)=>t+(b.copper||0),0);
+// A slip resets the stroke you were drawing, never the branches you already
+// finished. Wiping a good branch because you brushed a keep-out zone on the
+// next one is the kind of unfairness that makes people close the app.
+function resetBranch(b){
+  b.pts=[]; b.heat=[]; b.copper=0; b.done=false; b.R=0; b.I=0;
+  for (const li of b.lamps) { S.lamps[li].I=0; S.lamps[li].glow=0; }
+  S.viaHit=false; S.copperUsed=totalCopper(); solve();
+}
 const allDone =()=> S.branches.every(b=>b.done);
 
 /* ---------------- input ---------------- */
@@ -459,7 +514,7 @@ function blocked(p,w){
   return p.x<-0.1||p.x>CFG.BW+0.1||p.y<-0.1||p.y>BH+0.1;
 }
 function resetAll(){
-  for (const b of S.branches){ b.pts=[]; b.heat=[]; b.done=false; b.R=0; b.I=0; }
+  for (const b of S.branches){ b.pts=[]; b.heat=[]; b.copper=0; b.done=false; b.R=0; b.I=0; }
   for (const L of S.lamps){ L.I=0; L.glow=0; }
   S.bi=0; S.viaHit=false; S.copperUsed=0; S.supplyI=0; banner();
 }
@@ -471,7 +526,8 @@ cv.addEventListener("pointerdown",(e)=>{
   if (dist(p,S.src)>1.05){ A.nope(); return; }
   e.preventDefault(); cv.setPointerCapture(e.pointerId);
   const b=curBranch(); if(!b) return;
-  b.pts=[{x:S.src.x,y:S.src.y,w:wMax()}]; b.heat=[0]; b.done=false;
+  b.pts=[{x:S.src.x,y:S.src.y,w:wMax()}]; b.heat=[0]; b.done=false; b.copper=0;
+  S.copperUsed=totalCopper();
   S.viaHit=false; S.drawing=true; curW=wMax();
   last={x:S.src.x,y:S.src.y}; lastT=performance.now();
   A.clack();
@@ -500,7 +556,7 @@ cv.addEventListener("pointermove",(e)=>{
     if (segL*w>left) w=Math.max(wMin()*0.55,left/segL);
     if (blocked(q,w)){ endStroke(false); A.nope(); return; }
     b.pts.push({x:q.x,y:q.y,w}); b.heat.push(0);
-    S.copperUsed+=segL*w;
+    b.copper+=segL*w; S.copperUsed=totalCopper();
   }
   last=p; lastT=now; solve();
 
@@ -525,7 +581,7 @@ cv.addEventListener("pointercancel",()=>{ if(S.drawing) endStroke(false); });
 function endStroke(connected){
   S.drawing=false; A.scratch(0);
   const b=curBranch();
-  if (!connected){ resetAll(); A.nope(); return; }
+  if (!connected){ resetBranch(b); banner(); A.nope(); return; }
   const goal=S.lamps[b.lamps[b.lamps.length-1]];
   b.pts.push({x:goal.x,y:goal.y,w:b.pts[b.pts.length-1].w}); b.heat.push(0);
   b.done=true; solve();
@@ -547,7 +603,9 @@ function stepPhysics(dt){
 
   const dark = S.lamps.some(L=>L.I<CFG.I_MIN);
   if (dark){ if (S.liveT>CFG.DARK_MS) return fail('DARK'); }
-  for (const L of S.lamps) L.glow = L.I>=CFG.I_MIN ? Math.min(1,L.glow+dt*5) : Math.max(0,L.glow-dt*3);
+  // eased, not linear — a filament does not come up at a constant rate
+  for (const L of S.lamps) L.glow = L.I>=CFG.I_MIN
+    ? L.glow + (1-L.glow)*Math.min(1,dt*7) : Math.max(0,L.glow-dt*3.5);
 
   let hi=0, hiB=null, hiI=0;
   for (const b of S.branches){
@@ -582,6 +640,7 @@ function fail(kind){
   const pt = S.burn ? S.burn.b.pts[S.burn.i] : S.lamps[0];
   if (kind==='FUSE'){ A.trip(); } else { A.pop(); }
   S.shake=9; spark(pt, kind==='BURNED'?38:26);
+  S.freeze=90;   // animators call it a hold; nothing moves for a beat
   if (kind==='BURNED'){ S.phase='burning'; S.slowmo=CFG.SLOWMO_MS; }
   else { S.phase='burning'; S.slowmo=520; }
   const worst = S.lamps.reduce((a,L)=>L.I>a?L.I:a,0);
@@ -616,9 +675,11 @@ function succeed(){
   const cool=1-clamp(S.maxHeat,0,1);
   const cm=1+0.25*Math.min(S.chain-1,6);
   const gained=Math.round((100*S.stage+200*eff+150*cool)*S.mods.score*cm);
-  S.score+=gained; S.taught=true;
+  S.score+=gained;
+  if(!META.taught){ META.taught=true; save(); }
   // adaptive pacing: cruising raises the ramp, struggling lowers it
   if (S.maxHeat<0.5 && eff>0.3) META.skill=clamp(META.skill+0.03,0.78,1.32);
+  if (S.maxHeat>0.72) S.needBreather=true;   // that one was close — ease off next
   flash('Held','var(--ok)','+'+gained+(cm>1?'   ×'+cm.toFixed(2)+' chain':'')+'   ·   '+Math.round(cool*100)+'% headroom');
   const forStage=S.stage;
   later(()=>{
@@ -668,6 +729,8 @@ function flash(text,color,sub){
 function banner(){
   const el=$("banner");
   let t='';
+  if (S.breather && S.phase==='draw' && !S.branches.some(b=>b.pts.length)) t='Breather — supply eased off';
+  else
   if (S.type==='parallel' && S.branches.length>1 && S.phase==='draw')
     t = allDone()?'':'Branch '+(S.bi+1)+' of 2  ·  fuse '+mA(S.fuse)+' mA';
   else if (S.type==='series' && S.phase==='draw')
@@ -733,10 +796,10 @@ function newRun(){
   cancelPending();
   $("draft").classList.remove("show"); $("resolder").classList.remove("show");
   $("over").classList.remove("show"); $("lab").classList.remove("show");
-  S.stage=1; S.score=0; S.chain=0; S.parts=[];
+  S.stage=1; S.score=0; S.chain=0; S.parts=[]; S.sawChain=false; S.needBreather=false;
   S.solder = 1 + lvl('solder');
   S.mods = baseMods();
-  genBoard();
+  genBoard(); showTitle();
 }
 $("again").addEventListener("click", newRun);
 $("do-resolder").addEventListener("click",()=>{
@@ -882,8 +945,13 @@ function hud(){
   setHTML("v-volts", S.volts.toFixed(1)+'<small>V</small>');
   setText("v-score", String(S.score));
   const cm=1+0.25*Math.min(Math.max(S.chain-1,0),6);
+  if (S.chain>1) S.sawChain=true;
   setText("v-combo", '×'+cm.toFixed(2));
   $("cell-combo").classList.toggle("flat", cm<=1);
+  // A first-time player does not need a chain multiplier or a score before
+  // either exists. Complexity arrives when it starts to mean something.
+  $("cell-combo").classList.toggle("hidden", !S.sawChain);
+  $("cell-score").classList.toggle("hidden", S.score===0 && S.stage===1);
   const left=clamp(1-S.copperUsed/S.budget,0,1);
   setHTML("v-copper", Math.round(left*100)+'<small>%</small>');
   const f=$("copperfill"); f.style.width=(left*100).toFixed(1)+'%';
@@ -904,7 +972,7 @@ function hud(){
     : 'draw a trace');
 
   const h=$("hint");
-  if(!S.taught&&S.phase==='draw'){ h.style.opacity=1;
+  if(!META.taught && S.stage===1 && S.phase==='draw'){ h.style.opacity=1;
     setHTML("hint",'Drag from <b>+</b> to the lamp<br>Slow drag = <b>thick copper</b>');
   } else h.style.opacity=0;
 }
@@ -913,6 +981,7 @@ function hud(){
 let prevT=performance.now();
 function frame(now){
   let dt=Math.min((now-prevT)/1000,0.05); prevT=now;
+  if(S.freeze>0){ S.freeze-=dt*1000; dt=0; }
   if(S.phase==='live'){ stepPhysics(dt); S.dashOff+=S.supplyI*760*dt; }
   if(S.phase==='burning'){
     S.slowmo-=dt*1000;
@@ -929,6 +998,18 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
+/* ---------------- identity, without a gate ---------------- */
+// The name shows over the playable board and fades. It never costs a tap,
+// which is the whole point: a menu is a wall between someone and the hook.
+function showTitle(){
+  const t=$("titlecard");
+  $("titlesub").textContent = META.runs > 0
+    ? 'best ' + META.best.toLocaleString() + '   ·   ' + META.rp + ' RP banked'
+    : '';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), META.runs > 0 ? 2200 : 1700);
+}
+
 /* ---------------- boot ---------------- */
 (function viewport(){
   let m=document.querySelector('meta[name="viewport"]');
@@ -941,7 +1022,7 @@ function boot(){
   resize();
   if(cssW<40){ requestAnimationFrame(boot); return; }
   S.solder=1+lvl('solder'); S.mods=baseMods();
-  genBoard();
+  genBoard(); applyMute(); showTitle();
   requestAnimationFrame(frame);
 }
 boot();
