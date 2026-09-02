@@ -9,7 +9,8 @@
     "test:physics": "npm run build && node tests/physics.test.js",
     "test:e2e": "npm run build && node tests/e2e.test.js",
     "shots": "npm run build && node tools/shots.js",
-    "sweep": "npm run build && node tools/sweep.js"
+    "sweep": "npm run build && node tools/sweep.js",
+    "package": "node tools/package-portal.js"
   },
   "devDependencies": { "playwright": "^1.49.0" }
 }

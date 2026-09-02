@@ -5,3 +5,4 @@ shots/
 .DS_Store
 Thumbs.db
 push.cmd
+dist/
