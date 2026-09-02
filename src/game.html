@@ -36,6 +36,36 @@
   #copperfill{height:100%;width:100%;background:var(--copper);transition:width .16s cubic-bezier(.22,.68,.24,1),background .25s}
   #copperfill.low{background:var(--hot)}
 
+  /* chapter strip - where you are and how far to the boss */
+  #chapbar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+           gap:10px;padding:6px 14px 7px;background:var(--panel);
+           border-bottom:1px solid var(--edge)}
+  #chapname{font-family:var(--f-disp);font-size:10px;font-weight:600;letter-spacing:.17em;
+            text-transform:uppercase;color:var(--dim);white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis}
+  #chapname b{color:var(--copper);font-weight:600}
+  #chappips{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+  #chappips i{width:13px;height:3px;border-radius:1px;background:var(--edge-hi);
+              transition:background .2s}
+  #chappips i.done{background:var(--copper)}
+  #chappips i.now{background:var(--ink);box-shadow:0 0 6px rgba(237,230,220,.55)}
+  #chappips i.boss{width:8px;height:8px;border-radius:50%;background:transparent;
+                   border:1.5px solid var(--edge-hi)}
+  #chappips i.boss.done{background:var(--copper);border-color:var(--copper)}
+  #chappips i.boss.now{background:var(--hot);border-color:var(--hot);
+                       box-shadow:0 0 9px rgba(255,90,60,.75)}
+
+  #bosscard{position:absolute;left:0;right:0;top:26%;text-align:center;pointer-events:none;
+            opacity:0;transition:opacity .5s ease-out;padding:0 22px}
+  #bosscard.show{opacity:1}
+  #bosscard .bk{font-family:var(--f-disp);font-size:10px;font-weight:600;letter-spacing:.32em;
+                text-transform:uppercase;color:var(--hot);display:block;margin-bottom:9px}
+  #bosscard .bt{font-family:var(--f-disp);font-size:min(38px,9vw);font-weight:700;
+                letter-spacing:.07em;text-transform:uppercase;color:var(--ink);
+                display:block;line-height:1.05}
+  #bosscard .bb{font-family:var(--f-mono);font-size:12px;color:var(--muted);
+                display:block;margin-top:11px;line-height:1.5}
+
   /* board */
   #stagewrap{flex:1 1 auto;position:relative;min-height:0;background:var(--substrate)}
   #board{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -173,9 +203,15 @@
       <div id="copperbar"><div id="copperfill"></div></div></div>
   </div>
 
+  <div id="chapbar">
+    <span id="chapname">&mdash;</span>
+    <span id="chappips"></span>
+  </div>
+
   <div id="stagewrap">
     <canvas id="board"></canvas>
     <div id="banner"></div>
+    <div id="bosscard"><span class="bk">Boss</span><span class="bt" id="bosstitle"></span><span class="bb" id="bossblurb"></span></div>
     <div id="titlecard"><span class="tn">Current</span><span class="ts" id="titlesub"></span></div>
     <div id="hint"></div>
     <div id="verdict"></div>
@@ -263,6 +299,8 @@ const CFG = {
   GAUGE_MAX:0.9, DRAFT_EVERY:2,
   FUSE_PARALLEL:0.80,      // supply fuse, parallel boards only (amps)
   MIN_MARGIN:0.14,         // every board must be solvable with this much headroom
+  MIN_MARGIN_BOSS:0.07,    // a boss may bite, but still cannot be unwinnable
+  CHAPTER_LEN:6,           // learn - build - build - build - build - boss
   SLOWMO_MS:900
 };
 
@@ -322,6 +360,37 @@ const A = {
   clack(){ this.noise(0.05,3000,0.16); },
   nope(){ this.tone(110,0.16,'square',0.10,70); }
 };
+
+/* ---------------- chapters ---------------- */
+// Boards stay procedural - a solo developer cannot hand-author hundreds - but
+// they are grouped into named sectors that end in a boss with its own rule.
+// You remember clearing the Foundry. You do not remember clearing stage 17.
+const CHAPTERS = [
+  { name:'The Bench',   sub:'#101416', grid:'rgba(237,230,220,0.045)',
+    boss:{ title:'The Long Run', blurb:'One lamp. The far corner. No cover.',
+           kind:'single', obs:-2, spread:1.55 } },
+  { name:'Substation',  sub:'#0E1519', grid:'rgba(150,200,235,0.055)',
+    boss:{ title:'Split Decision', blurb:'Two branches, one fuse, and it is tight.',
+           kind:'parallel', fuse:0.86, obs:-1 } },
+  { name:'The Foundry', sub:'#171110', grid:'rgba(255,150,90,0.055)',
+    boss:{ title:'Thermal Runaway', blurb:'The board runs hot. Copper sheds heat slowly here.',
+           kind:'series', cool:0.62 } },
+  { name:'Deep Freeze', sub:'#0D1418', grid:'rgba(170,220,255,0.06)',
+    boss:{ title:'Chain of Three', blurb:'Three lamps. One current through all of them.',
+           kind:'triple' } },
+  { name:'The Grid',    sub:'#121316', grid:'rgba(237,230,220,0.05)',
+    boss:{ title:'The Gauntlet', blurb:'Every keep-out zone they had.',
+           kind:'single', obs:3 } },
+  { name:'Reactor',     sub:'#180F14', grid:'rgba(255,120,140,0.055)',
+    boss:{ title:'Overload', blurb:'The supply climbs while you watch. Leave yourself room.',
+           kind:'single', climb:0.16 } }
+];
+const chapIdx  = (st)=> Math.floor((st-1)/CFG.CHAPTER_LEN) % CHAPTERS.length;
+const chapNum  = (st)=> Math.floor((st-1)/CFG.CHAPTER_LEN) + 1;
+const chapStep = (st)=> ((st-1) % CFG.CHAPTER_LEN) + 1;
+const isBoss   = (st)=> chapStep(st) === CFG.CHAPTER_LEN;
+const isTeaching = (st)=> st === 4 || st === 7;   // series, then parallel
+const chapter  = (st)=> CHAPTERS[chapIdx(st)];
 
 /* ---------------- persistent meta ---------------- */
 const UPG = [
@@ -395,11 +464,15 @@ const px=(u)=>u*unit;
 function rectHit(p,r,pad){ return p.x>r.x-pad&&p.x<r.x+r.w+pad&&p.y>r.y-pad&&p.y<r.y+r.h+pad; }
 
 function boardType(stage){
+  if (isBoss(stage)){
+    const k = chapter(stage).boss.kind;
+    return k === 'triple' ? 'series' : k;
+  }
   if (S.breather) return 'single';
   if (stage <= 3) return 'single';
-  if (stage === 4) return 'series';
-  if (stage === 6) return 'parallel';
-  if (stage < 6)   return 'single';
+  if (stage === 4) return 'series';   // meet series, then the chapter 1 boss tests it
+  if (stage === 7) return 'parallel'; // meet parallel at the top of chapter 2
+  if (stage <  7)  return 'single';
   const r=Math.random();
   return r < 0.42 ? 'single' : r < 0.71 ? 'series' : 'parallel';
 }
@@ -410,8 +483,12 @@ function genBoard(){
   // one gives the curve a rhythm instead of a relentless climb.
   // Never ease off on a stage that teaches something new (4 = series,
   // 6 = parallel). Those are mastery moments, not places for a let-up.
-  S.breather = S.stage > 6 && (S.needBreather || S.stage % 5 === 4);
+  S.boss = isBoss(S.stage) ? chapter(S.stage).boss : null;
+  // a boss is the point of the chapter; never soften one into a breather
+  S.breather = !S.boss && !isTeaching(S.stage) && S.stage > 6
+             && (S.needBreather || chapStep(S.stage) === 1);
   S.needBreather = false;
+  S.voltClimb = 0;
   // A new board owns the screen. Without this, an overlay left showing from a
   // previous outcome sits on top of the canvas and silently swallows every
   // touch — the board looks playable and does not respond.
@@ -435,13 +512,21 @@ function genBoard(){
     S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0,copper:0},
                 {pts:[],heat:[],lamps:[1],done:false,R:0,I:0,copper:0}];
   } else if (S.type === 'series'){
-    const mid=BH/2+rand(-BH*0.08,BH*0.08), flip=Math.random()<0.5?-1:1;
+    const nL = (S.boss && S.boss.kind==='triple') ? 3 : 2;
+    const mid=BH/2+rand(-BH*0.08,BH*0.08); let flip=Math.random()<0.5?-1:1;
     S.src={ x:rand(0.9,1.5), y:clamp(mid-rand(BH*0.16,BH*0.28)*flip,1.2,BH-1.2) };
-    S.lamps=[{x:rand(BW*0.44,BW*0.58),y:clamp(mid+rand(BH*0.14,BH*0.26)*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0},
-             {x:rand(BW-1.7,BW-0.9),  y:clamp(mid-rand(BH*0.10,BH*0.24)*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
-    S.branches=[{pts:[],heat:[],lamps:[0,1],done:false,R:0,I:0,copper:0}];
+    S.lamps=[];
+    for (let i=0;i<nL;i++){
+      const fx = (i+1)/(nL+0.28);
+      flip = -flip;
+      S.lamps.push({ x: clamp(BW*(0.30+fx*0.62)+rand(-0.3,0.3), 2.2, BW-0.9),
+                     y: clamp(mid + rand(BH*0.12,BH*0.26)*flip, 1.2, BH-1.2),
+                     R:CFG.R_LOAD, I:0, glow:0 });
+    }
+    S.branches=[{pts:[],heat:[],lamps:S.lamps.map((_,i)=>i),done:false,R:0,I:0,copper:0}];
   } else {
-    const mid=BH/2+rand(-BH*0.09,BH*0.09), half=rand(BH*0.17,BH*0.34), flip=Math.random()<0.5?-1:1;
+    const mid=BH/2+rand(-BH*0.09,BH*0.09), flip=Math.random()<0.5?-1:1;
+    const half=rand(BH*0.17,BH*0.34)*((S.boss&&S.boss.spread)||1);
     S.src={ x:rand(0.9,1.7), y:clamp(mid-half*flip,1.2,BH-1.2) };
     S.lamps=[{x:rand(BW-1.7,BW-0.9),y:clamp(mid+half*flip,1.2,BH-1.2),R:CFG.R_LOAD,I:0,glow:0}];
     S.branches=[{pts:[],heat:[],lamps:[0],done:false,R:0,I:0,copper:0}];
@@ -450,7 +535,8 @@ function genBoard(){
   // keep-out zones seeded on the routes
   let n = S.stage===1 ? 0 : Math.min(Math.floor((S.stage-1)/2)+1, 4);
   if (S.breather) n = Math.max(0, n-2);
-  if (S.stage===4 || S.stage===6) n = Math.max(0, n-1);
+  if (isTeaching(S.stage)) n = Math.max(0, n-1);   // meeting a new mechanic
+  if (S.boss && S.boss.obs) n = Math.max(0, n + S.boss.obs);
   let guard=0;
   while (S.obs.length<n && guard++<300){
     const tgt = S.lamps[(Math.random()*S.lamps.length)|0];
@@ -466,7 +552,7 @@ function genBoard(){
   }
 
   // supply sized to this board's geometry so difficulty is layout-independent
-  const teaching = (S.stage===4 || S.stage===6);
+  const teaching = isTeaching(S.stage);
   let ramp = (1 + CFG.V_RAMP*(S.stage-1)*META.skill)
            * (S.breather ? 0.80 : 1) * (teaching ? 0.86 : 1);
   let boost = 1;
@@ -480,7 +566,12 @@ function genBoard(){
     S.volts  = CFG.I_REF*(rho()*(dSum/S.branches.length)/CFG.W_REF + loadPer) * ramp * S.mods.volt;
     S.budget = CFG.BUDGET(dSum) * S.mods.budget * (1 + 0.07*S.obs.length) * boost;
     S.fuse   = S.type==='parallel' ? CFG.FUSE_PARALLEL*S.mods.imax : Infinity;
+    if (S.boss){
+      if (S.boss.fuse)  S.fuse   = S.boss.fuse * S.mods.imax;
+      if (S.boss.climb){ S.volts *= 0.80; S.voltClimb = 0.172; }
+    }
   };
+  if (S.boss && S.boss.cool) S.mods.cool *= S.boss.cool;
   size();
   // Ease the board until a competent route has real headroom. Clearing a
   // keep-out zone is the gentlest lever, so spend those first; only then
@@ -489,20 +580,24 @@ function genBoard(){
   // wrong, so spend those first. After that the lever has to match the
   // complaint: a starved lamp wants more supply, a hot trace wants less, and
   // a route you cannot afford wants more copper.
+  const floor = S.boss ? CFG.MIN_MARGIN_BOSS : CFG.MIN_MARGIN;
+  const keepZones = !!(S.boss && S.boss.obs > 0);
   let ease=0;
-  while (ease++ < 30){
+  while (ease++ < 40){
     const r = boardMargin();
-    if (r.m >= CFG.MIN_MARGIN) break;
-    if (S.obs.length) S.obs.pop();
-    else if (r.bind === 'copper') boost *= 1.10;
-    else if (r.bind === 'under')  ramp  *= 1.06;
-    else                          ramp  *= 0.95;
+    if (r.m >= floor) break;
+    if (ease > 10 && S.obs.length && !keepZones) S.obs.pop();
+    else if (r.bind === 'copper') boost *= 1.07;
+    else if (r.bind === 'under')  ramp  *= 1.04;
+    else                          ramp  *= 0.97;
     size();
   }
   S.genMargin = +boardMargin().m.toFixed(3);
   S.phase='draw';
   buildGauges();
+  chapterUI();
   banner();
+  if (S.boss) showBoss();
 }
 
 // Best margin a competent player could reach on this board, across every
@@ -514,13 +609,20 @@ function boardMargin(){
     for (const li of b.lamps){ dSum+=dist(from,S.lamps[li]); from=S.lamps[li]; }
   }
   const routes=S.branches.length;
-  const L=(dSum/routes)*(1+0.12*S.obs.length);   // allow for routing around zones
+  // Route length has to be estimated ACCURATELY, not generously. Measured
+  // against real A* routes, keep-out zones add about 6% each - they are placed
+  // on the line but are usually skirted, not circled. Over-estimating is the
+  // dangerous direction: a longer assumed route implies more resistance, so
+  // the check believes the current is lower and cooler than it really is, and
+  // waves through a board that burns every time.
+  const L=(dSum/routes)*(1+0.06*S.obs.length);
+  const V=S.volts*(S.voltClimb?Math.exp(S.voltClimb*CFG.LIVE_MS/1000):1);
   const load=S.branches[0].lamps.length*CFG.R_LOAD;
   const share=S.budget/routes;
   let best={m:-Infinity,bind:'none'};
   for(let k=0;k<=40;k++){
     const w=wMin()+(wMax()-wMin())*k/40;
-    const I=S.volts/(rho()*L/w+load);
+    const I=V/(rho()*L/w+load);
     if (routes>1 && I*routes>S.fuse) continue;
     const hSS=(I*I*rho()/(w*w))*CFG.K_HEAT/(CFG.K_COOL*S.mods.cool);
     const c={ under:(I-CFG.I_MIN)/CFG.I_MIN, over:(iMax()-I)/iMax(),
@@ -658,6 +760,7 @@ function energize(){ S.phase='live'; S.liveT=0; S.maxHeat=0; S.burn=null; solve(
 
 function stepPhysics(dt){
   S.liveT+=dt*1000;
+  if (S.voltClimb){ S.volts *= (1 + S.voltClimb*dt); solve(); }
 
   if (S.supplyI > S.fuse){ if (S.liveT>340) return fail('FUSE'); return; }
 
@@ -744,7 +847,8 @@ function succeed(){
   // adaptive pacing: cruising raises the ramp, struggling lowers it
   if (S.maxHeat<0.5 && eff>0.3) META.skill=clamp(META.skill+0.03,0.78,1.32);
   if (S.maxHeat>0.72) S.needBreather=true;   // that one was close — ease off next
-  flash('Held','var(--ok)','+'+gained+(cm>1?'   ×'+cm.toFixed(2)+' chain':'')+'   ·   '+Math.round(cool*100)+'% headroom');
+  if (S.boss) flash('Sector clear','var(--copper)', chapter(S.stage).name + '   ·   +' + gained);
+  else flash('Held','var(--ok)','+'+gained+(cm>1?'   ×'+cm.toFixed(2)+' chain':'')+'   ·   '+Math.round(cool*100)+'% headroom');
   const forStage=S.stage;
   later(()=>{
     if (S.stage!==forStage) return;            // board changed under us
@@ -883,8 +987,9 @@ function heatCol(h,alpha){
   return 'rgba('+c[0]+','+c[1]+','+c[2]+','+(alpha===undefined?1:alpha)+')';
 }
 function drawBg(){
-  cx.fillStyle='#101416'; cx.fillRect(-30,-30,cssW+60,cssH+60);
-  cx.fillStyle='rgba(237,230,220,0.045)';
+  const ch=chapter(S.stage);
+  cx.fillStyle=ch.sub; cx.fillRect(-30,-30,cssW+60,cssH+60);
+  cx.fillStyle=ch.grid;
   for(let y=0.5;y<BH;y+=0.5) for(let x=0.5;x<CFG.BW;x+=0.5) cx.fillRect(px(x)-0.5,px(y)-0.5,1,1);
 }
 function drawObstacles(){
@@ -1062,11 +1167,40 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
+function chapterUI(){
+  const st=S.stage, ch=chapter(st);
+  setHTML('chapname', ch.name + ' <b>&middot; sector ' + chapNum(st) + '</b>');
+  const pips=$('chappips');
+  if (pips.childElementCount !== CFG.CHAPTER_LEN){
+    pips.innerHTML='';
+    for(let i=1;i<=CFG.CHAPTER_LEN;i++){
+      const el=document.createElement('i');
+      if(i===CFG.CHAPTER_LEN) el.className='boss';
+      pips.appendChild(el);
+    }
+  }
+  const step=chapStep(st);
+  [...pips.children].forEach((el,i)=>{
+    const k=i+1, boss=(k===CFG.CHAPTER_LEN);
+    el.className=(boss?'boss ':'')+(k<step?'done':k===step?'now':'');
+  });
+}
+
+function showBoss(){
+  if(!S.boss) return;
+  $('titlecard').classList.remove('show');   // never stack two cards
+  setText('bosstitle', S.boss.title);
+  setText('bossblurb', S.boss.blurb);
+  const c=$('bosscard'); c.classList.add('show');
+  setTimeout(()=>c.classList.remove('show'), 2600);
+}
+
 /* ---------------- identity, without a gate ---------------- */
 // The name shows over the playable board and fades. It never costs a tap,
 // which is the whole point: a menu is a wall between someone and the hook.
 function showTitle(){
   const t=$("titlecard");
+  $('bosscard').classList.remove('show');
   $("titlesub").textContent = META.runs > 0
     ? 'best ' + META.best.toLocaleString() + '   ·   ' + META.rp + ' RP banked'
     : '';

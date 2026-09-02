@@ -29,6 +29,14 @@ const draw = (page, bi, w, pinch) => page.evaluate(({ bi, w, pinch }) => {
   return { R: +b.R.toFixed(2), I: +(b.I * 1000).toFixed(0) };
 }, { bi, w, pinch });
 
+const genType = (page, type, stage) => page.evaluate(({ type, stage }) => {
+  for (let i = 0; i < 300; i++) {
+    S.mods = baseMods(); S.needBreather = false; S.stage = stage; genBoard();
+    if (S.type === type) return { ok: true, stage: S.stage, boss: S.boss ? S.boss.title : null };
+  }
+  return { ok: false };
+}, { type, stage });
+
 const state = (page) => page.evaluate(() => ({
   phase: S.phase, type: S.type, stage: S.stage, score: S.score, chain: S.chain,
   supply: mA(S.supplyI), fuse: mA(S.fuse), maxHeat: +S.maxHeat.toFixed(2),
@@ -67,7 +75,7 @@ const state = (page) => page.evaluate(() => ({
   ok(s.stage === 2, 'clearing stage 1 advances the run');
 
   console.log('\n== series: two lamps, one current ==');
-  await page.evaluate(() => { S.stage = 4; genBoard(); });
+  await genType(page, 'series', 4);
   const ser = await page.evaluate(() => ({ type: S.type, branches: S.branches.length, branchLamps: S.branches[0].lamps.length }));
   ok(ser.type === 'series' && ser.branches === 1 && ser.branchLamps === 2, 'one branch carrying two lamps');
   await draw(page, 0, 0.36);
@@ -79,7 +87,7 @@ const state = (page) => page.evaluate(() => ({
   ok(sc.a === sc.b && Math.abs(sc.a - sc.hand) < 2, 'both lamps carry V/(R+2*R_load)');
 
   console.log('\n== parallel: independent branches, shared supply ==');
-  await page.evaluate(() => { S.stage = 6; genBoard(); });
+  ok((await genType(page, 'parallel', 9)).ok, 'a parallel board can be generated');
   ok((await page.evaluate(() => S.branches.length)) === 2, 'two branches generated');
   await draw(page, 0, 0.30); await draw(page, 1, 0.30);
   const pc = await page.evaluate(() => ({
@@ -91,7 +99,7 @@ const state = (page) => page.evaluate(() => ({
   ok(Math.abs(pc.supply - (pc.I1 + pc.I2)) <= 1, 'supply current is the sum of the branch currents');
 
   console.log('\n== supply fuse ==');
-  await page.evaluate(() => { S.stage = 6; genBoard(); });
+  await genType(page, 'parallel', 9);
   await draw(page, 0, 0.45); await draw(page, 1, 0.45);
   await page.evaluate(() => energize());
   await page.waitForTimeout(2600);
@@ -122,7 +130,7 @@ const state = (page) => page.evaluate(() => ({
   ok(s.phase === 'draw' && s.solder === 0 && s.chain === 0, 're-solder resumes play, spends the charge, resets the chain');
 
   console.log('\n== a slip must not destroy finished work ==');
-  await page.evaluate(() => { S.stage = 6; genBoard(); });
+  await genType(page, 'parallel', 9);
   await draw(page, 0, 0.30);
   const before = await page.evaluate(() => ({ done0: S.branches[0].done, pts0: S.branches[0].pts.length,
                                               copper: +S.copperUsed.toFixed(2) }));
@@ -145,9 +153,9 @@ const state = (page) => page.evaluate(() => ({
     const out = {};
     S.needBreather = false; S.stage = 4; genBoard();
     out.teachingStageNotEased = (S.breather === false && S.type === 'series');
-    S.needBreather = false; S.stage = 6; genBoard();
+    S.needBreather = false; S.stage = 7; genBoard();
     out.parallelStageNotEased = (S.breather === false && S.type === 'parallel');
-    S.stage = 9; S.needBreather = true; genBoard();
+    S.stage = 10; S.needBreather = true; genBoard();
     const d = Math.hypot(S.lamps[0].x - S.src.x, S.lamps[0].y - S.src.y);
     const load = S.branches[0].lamps.length * CFG.R_LOAD;
     const unEased = CFG.I_REF * (rho() * d / CFG.W_REF + load)
@@ -161,7 +169,7 @@ const state = (page) => page.evaluate(() => ({
   });
   console.log('  ', JSON.stringify(pace));
   ok(pace.teachingStageNotEased, 'stage 4 still teaches series, never eased into a breather');
-  ok(pace.parallelStageNotEased, 'stage 6 still teaches parallel');
+  ok(pace.parallelStageNotEased, 'stage 7 still teaches parallel');
   ok(pace.breather && pace.easedV && pace.singleLamp, 'a close call schedules an easier next board');
 
   console.log('\n== every board is winnable with headroom ==');
@@ -177,18 +185,39 @@ const state = (page) => page.evaluate(() => ({
         S.mods = baseMods(); META.skill = 1;
         S.needBreather = false; S.stage = stage; genBoard();
         const m = boardMargin().m;
+        const floor = S.boss ? CFG.MIN_MARGIN_BOSS : CFG.MIN_MARGIN;
         out.checked++;
-        if (m < out.worst) out.worst = +m.toFixed(3);
-        if (m < CFG.MIN_MARGIN) out.bad.push({ stage, margin: +m.toFixed(3), type: S.type });
+        if (m - floor < out.worst) out.worst = +(m - floor).toFixed(3);
+        if (m < floor) out.bad.push({ stage, margin: +m.toFixed(3), type: S.type, boss: !!S.boss });
       }
     }
     META.skill = savedSkill;
     return out;
   });
-  console.log('   checked ' + gen.checked + ' generated boards, worst margin ' +
-              gen.worst + ' against a floor of ' + gen.floor);
+  console.log('   checked ' + gen.checked + ' generated boards; closest any came to its floor: ' +
+              gen.worst + ' (regular floor ' + gen.floor + ', boss floor lower)');
   ok(gen.bad.length === 0, 'no generated board falls below the solvability floor');
   if (gen.bad.length) console.log('   offenders: ' + JSON.stringify(gen.bad.slice(0, 5)));
+
+  console.log('\n== chapters and bosses ==');
+  const chap = await page.evaluate(() => {
+    const out = { bosses: [], distinct: new Set(), badFloor: [], names: new Set() };
+    for (let st = 1; st <= 36; st++) {
+      S.mods = baseMods(); META.skill = 1; S.needBreather = false; S.stage = st; genBoard();
+      out.names.add(chapter(st).name);
+      if (isBoss(st)) { out.bosses.push(S.boss.title); out.distinct.add(S.boss.title); }
+      else if (S.boss) out.badFloor.push('non-boss stage ' + st + ' has a boss');
+      const floor = S.boss ? CFG.MIN_MARGIN_BOSS : CFG.MIN_MARGIN;
+      if (boardMargin().m < floor) out.badFloor.push('stage ' + st + ' below floor');
+    }
+    return { bosses: out.bosses, distinct: out.distinct.size, bad: out.badFloor, names: out.names.size };
+  });
+  console.log('   ' + chap.bosses.length + ' bosses in 36 stages, ' + chap.distinct +
+              ' distinct, ' + chap.names + ' named sectors');
+  ok(chap.bosses.length === 6 && chap.distinct === 6, 'each sector ends in its own boss');
+  ok(chap.names === 6, 'six named sectors across 36 stages');
+  ok(chap.bad.length === 0, 'bosses bite but stay winnable');
+  if (chap.bad.length) console.log('   ' + JSON.stringify(chap.bad.slice(0, 4)));
 
   console.log('\n== mute ==');
   const muted = await page.evaluate(() => {

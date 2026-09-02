@@ -82,7 +82,17 @@ const ok = async (c, m) => {
   console.log('\n== two-branch parallel board ==');
   // generous copper here on purpose: this test is about the two-branch input
   // flow, not the copper economy, which physics.test.js already covers.
-  await page.evaluate(() => { S.stage = 6; genBoard(); S.obs = []; S.budget *= 3; });
+
+  // Ask for the board TYPE, not the stage number that used to produce it —
+  // chapter structure moves stages around and this test is about the
+  // two-branch input flow, not about which stage parallel lives on.
+  await page.evaluate(() => {
+    for (let i = 0; i < 300; i++) {
+      S.mods = baseMods(); S.needBreather = false; S.stage = 9; genBoard();
+      if (S.type === 'parallel') break;
+    }
+    S.obs = []; S.budget *= 3;
+  });
   g = await geom();
   await ok(g.type === 'parallel', 'parallel board generated');
 
