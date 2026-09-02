@@ -1,0 +1,4 @@
+# These files were authored on Linux and will be edited on Windows.
+# Normalise line endings in the repo so diffs stay readable.
+* text=auto eol=lf
+*.png binary
